@@ -5,3 +5,4 @@ beautifulsoup4
 duckduckgo_search
 matplotlib
 scikit-learn
+transfermarkt-api-wrapper
