@@ -1,109 +1,77 @@
 import streamlit as st
 import requests
-from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
 import random
 
-# הגדרות ראשיות
+# הגדרות עמוד
 st.set_page_config(page_title="GiladScore", layout="centered")
-st.title("🔵 GiladScore – מערכת דירוג שחקני כדורגל")
-st.markdown("הזן שם של שחקן כדי לראות את ביצועיו, שוויו, תחזית עתידית ומידת ההתאמה לקבוצה")
+st.title("🔵 GiladScore – מבוסס SofaScore")
+st.markdown("הזן שם של שחקן כדי לראות את ביצועיו ותחזית עתידית.")
 
-player_name = st.text_input("שם השחקן:")
+player_name = st.text_input("שם שחקן (אנגלית):")
 
-# חיפוש FBref
-def find_fbref_url(player_name):
+def find_sofascore_player_url(name):
+    query = name.replace(" ", "-").lower()
+    # נחפש URL מתאים בסוג סטטית (אפשר לשפר בהמשך)
+    # דוגמה: https://www.sofascore.com/player/lionel-messi/28003
+    # נשתמש ב־Search API של SofaScore (לא רשמי).
+    url = f"https://www.sofascore.com/search/v2/player/{query}"
+    res = requests.get(url)
+    if res.status_code != 200:
+        return None
+    data = res.json()
     try:
-        query = f"{player_name} site:fbref.com"
-        with DDGS() as ddgs:
-            results = ddgs.text(query)
-            for r in results:
-                if "fbref.com/en/players/" in r["href"]:
-                    return r["href"]
-    except Exception as e:
-        print("DuckDuckGo search failed:", e)
+        players = data["player"]
+        if players and len(players) > 0:
+            return players[0]["url"]
+    except:
+        return None
     return None
 
-# שליפת סטטיסטיקות בסיסיות מ-FBref
-def extract_stats_from_fbref(url):
+def extract_sofascore_stats(player_url):
     try:
-        r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-        soup = BeautifulSoup(r.text, "html.parser")
-        stats = soup.select("div.stats_pullout div")
-        goals = assists = 0
-        for stat in stats:
-            text = stat.get_text()
-            if "Goals" in text:
-                goals = int(stat.find("strong").text.strip())
-            if "Assists" in text:
-                assists = int(stat.find("strong").text.strip())
-        rating = round(random.uniform(6.5, 8.0), 2)
-        return goals, assists, rating
+        full_url = "https://www.sofascore.com" + player_url
+        res = requests.get(full_url, headers={'User-Agent':'Mozilla/5.0'})
+        # נתוני HTML דינמי, יש גריף JSON בטקסט
+        prefix = "window.__INITIAL_STATE__ = "
+        idx = res.text.find(prefix)
+        if idx == -1:
+            return None
+        json_str = res.text[idx + len(prefix):]
+        json_str = json_str.split(";</script>", 1)[0]
+        data = requests.utils.json.loads(json_str)
+        stats = data["playerPage"]["player"]["statistics"]["seasonGoalsAndAssists"]
+        rating = data["playerPage"]["player"]["statistics"]["seasonRating"]
+        return stats["goals"], stats["assists"], rating
     except:
-        return 0, 0, 6.0
+        return None
 
-# שליפת שווי שוק חי מ-Transfermarkt דרך DuckDuckGo ו-HTML
-def get_transfermarkt_value_from_html(player_name):
-    try:
-        query = f"{player_name} site:transfermarkt.com"
-        with DDGS() as ddgs:
-            results = ddgs.text(query)
-            for r in results:
-                if "transfermarkt.com" in r["href"] and "/profil/" in r["href"]:
-                    url = r["href"]
-                    break
-            else:
-                return "⚠️ לא נמצא קישור"
-
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(url, headers=headers)
-        soup = BeautifulSoup(res.text, "html.parser")
-
-        tag = soup.find("div", class_="dataMarktwert")
-        if tag:
-            return tag.text.strip()
-        return "⚠️ לא נמצא שווי"
-    except Exception as e:
-        return f"⚠️ שגיאה: {str(e)}"
-
-# דירוג ביצועים לפי מדדים
 def calculate_score(goals, assists, rating):
-    return round((goals * 4 + assists * 3 + rating * 10) / 3, 2)
+    return round((goals * 4 + assists * 3 + rating * 10)/3, 2)
 
-# תחזית שיא קריירה עתידי
-def predict_peak_score(age, current_score):
-    if age < 24:
-        return round(current_score * random.uniform(1.1, 1.4), 2)
-    elif 24 <= age <= 29:
-        return current_score
-    else:
-        return round(current_score * random.uniform(0.8, 0.95), 2)
+def predict_peak(age, score):
+    if age < 24: return round(score*random.uniform(1.1,1.3),2)
+    if age <=29: return score
+    return round(score*random.uniform(0.85,0.95),2)
 
-# תהליך עיקרי
 if player_name:
-    st.success(f"הוזן השם: {player_name}")
-    st.info("מאתר נתונים חיים...")
-
-    fbref_url = find_fbref_url(player_name)
-
-    if fbref_url:
-        goals, assists, rating = extract_stats_from_fbref(fbref_url)
-        st.write(f"⚽️ גולים: {goals}")
-        st.write(f"🎯 בישולים: {assists}")
-        st.write(f"📊 ציון ממוצע: {rating}")
+    st.info("מאתר שחקן ב‑SofaScore…")
+    url = find_sofascore_player_url(player_name)
+    if not url:
+        st.error("⚠️ לא נמצא שחקן מתאים ב‑SofaScore (נסה באנגלית מלא)")
     else:
-        st.warning("⚠️ לא נמצאו נתונים מ־FBref (נסה באנגלית או שם מלא)")
-        goals, assists, rating = 0, 0, 6.0
-
-    score = calculate_score(goals, assists, rating)
-    st.subheader(f"⭐️ דירוג GiladScore: {score}")
-
-    age = random.randint(18, 35)
-    peak = predict_peak_score(age, score)
-    st.write(f"📈 גיל משוער: {age}")
-    st.write(f"🚀 תחזית שיא קריירה: {peak}")
-
-    value = get_transfermarkt_value_from_html(player_name)
-    st.write(f"💰 שווי שוק (Transfermarkt): {value}")
-
-    st.caption("הדירוג משקלל גולים, בישולים, ציונים, גיל, מגמת התפתחות ושווי")
+        res = extract_sofascore_stats(url)
+        if not res:
+            st.error("⚠️ לא הצלחנו לשלוף נתונים שוטפים")
+        else:
+            goals, assists, rating = res
+            st.write(f"⚽️ גולים: {goals}")
+            st.write(f"🎯 בישולים: {assists}")
+            st.write(f"📊 ממוצע דירוג: {rating}")
+            score = calculate_score(goals, assists, rating)
+            st.subheader(f"⭐️ דירוג GiladScore: {score}")
+            age = random.randint(18,35)
+            st.write(f"📈 גיל משוער: {age}")
+            st.write(f"🚀 תחזית שיא: {predict_peak(age, score)}")
+            # שווי שוק – מגירוד HTML של דף Player
+            market_tag = extract_sofascore_market(full_url)
+            st.write(f"💰 שווי (אם קיים): {market_tag or '— לא נמצא'}")
