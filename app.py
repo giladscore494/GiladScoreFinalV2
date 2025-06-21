@@ -3,16 +3,16 @@ import requests
 from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
 import random
-from transfermarkt_api_wrapper import Transfermarkt
+from transfermarket.market import Market  # ✅ ספרייה חדשה
 
-# קביעת עיצוב
+# הגדרות ראשיות
 st.set_page_config(page_title="GiladScore", layout="centered")
 st.title("🔵 GiladScore – מערכת דירוג שחקני כדורגל")
 st.markdown("הזן שם של שחקן כדי לראות את ביצועיו, שוויו, תחזית עתידית ומידת ההתאמה לקבוצה")
 
 player_name = st.text_input("שם השחקן:")
 
-# חיפוש URL מ-FBref
+# חיפוש FBref
 def find_fbref_url(player_name):
     try:
         query = f"{player_name} site:fbref.com"
@@ -25,7 +25,7 @@ def find_fbref_url(player_name):
         print("DuckDuckGo search failed:", e)
     return None
 
-# שליפת נתונים מ-FBref
+# שליפת סטטיסטיקות בסיסיות
 def extract_stats_from_fbref(url):
     try:
         r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -43,10 +43,24 @@ def extract_stats_from_fbref(url):
     except:
         return 0, 0, 6.0
 
-# חישוב מדדים
+# שווי שוק באמצעות transfermarket
+def get_tm_value(name: str) -> str:
+    try:
+        m = Market()
+        players = m.search_players(name)
+        if not players:
+            return "⚠️ לא נמצא"
+        pid = players[0].id
+        details = m.get_player(pid)
+        return details.market_value
+    except Exception as e:
+        return f"⚠️ שגיאה: {e}"
+
+# חישוב הדירוג
 def calculate_score(goals, assists, rating):
     return round((goals * 4 + assists * 3 + rating * 10) / 3, 2)
 
+# תחזית שיא קריירה עתידי
 def predict_peak_score(age, current_score):
     if age < 24:
         return round(current_score * random.uniform(1.1, 1.4), 2)
@@ -55,20 +69,7 @@ def predict_peak_score(age, current_score):
     else:
         return round(current_score * random.uniform(0.8, 0.95), 2)
 
-# שליפת שווי שוק דרך transfermarkt-api-wrapper
-def get_transfermarkt_value(player_name):
-    try:
-        tm = Transfermarkt()
-        players = tm.search_players(player_name)
-        if not players:
-            return "⚠️ לא נמצא ב־Transfermarkt"
-        player_id = players[0]['player_id']
-        details = tm.get_player_details(player_id)
-        return details.get("market_value", "⚠️ אין ערך זמין")
-    except Exception as e:
-        return f"שגיאה: {str(e)}"
-
-# הפעלת האפליקציה
+# התחלת תהליך עם שם שחקן
 if player_name:
     st.success(f"הוזן השם: {player_name}")
     st.info("מאתר נתונים חיים...")
@@ -81,7 +82,7 @@ if player_name:
         st.write(f"🎯 בישולים: {assists}")
         st.write(f"📊 ציון ממוצע: {rating}")
     else:
-        st.warning("⚠️ לא נמצאו נתונים ב-FBref (נסה באנגלית או שם מלא)")
+        st.warning("⚠️ לא נמצאו נתונים מ־FBref (נסה באנגלית או שם מלא)")
         goals, assists, rating = 0, 0, 6.0
 
     score = calculate_score(goals, assists, rating)
@@ -92,8 +93,8 @@ if player_name:
     st.write(f"📈 גיל משוער: {age}")
     st.write(f"🚀 תחזית שיא קריירה: {peak}")
 
-    # ✅ הצגת שווי שוק
-    value = get_transfermarkt_value(player_name)
+    # שווי שוק
+    value = get_tm_value(player_name)
     st.write(f"💰 שווי שוק (Transfermarkt): {value}")
 
     st.caption("הדירוג משקלל גולים, בישולים, ציונים, גיל, מגמת התפתחות ושווי")
