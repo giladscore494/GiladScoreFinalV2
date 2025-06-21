@@ -1,3 +1,17 @@
+from transfermarkt_api_wrapper import Transfermarkt
+
+def get_transfermarkt_value(player_name):
+    try:
+        tm = Transfermarkt()
+        players = tm.search_players(player_name)
+        if not players:
+            return "⚠️ לא נמצא ב־Transfermarkt"
+        
+        player_id = players[0]['player_id']
+        details = tm.get_player_details(player_id)
+        return details.get("market_value", "⚠️ אין ערך זמין")
+    except Exception as e:
+        return f"שגיאה: {str(e)}"
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
