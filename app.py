@@ -3,7 +3,6 @@ import requests
 from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
 import random
-from transfermarket.market import Market  # ✅ ספרייה חדשה
 
 # הגדרות ראשיות
 st.set_page_config(page_title="GiladScore", layout="centered")
@@ -25,7 +24,7 @@ def find_fbref_url(player_name):
         print("DuckDuckGo search failed:", e)
     return None
 
-# שליפת סטטיסטיקות בסיסיות
+# שליפת סטטיסטיקות בסיסיות מ-FBref
 def extract_stats_from_fbref(url):
     try:
         r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -43,20 +42,31 @@ def extract_stats_from_fbref(url):
     except:
         return 0, 0, 6.0
 
-# שווי שוק באמצעות transfermarket
-def get_tm_value(name: str) -> str:
+# שליפת שווי שוק חי מ-Transfermarkt דרך DuckDuckGo ו-HTML
+def get_transfermarkt_value_from_html(player_name):
     try:
-        m = Market()
-        players = m.search_players(name)
-        if not players:
-            return "⚠️ לא נמצא"
-        pid = players[0].id
-        details = m.get_player(pid)
-        return details.market_value
-    except Exception as e:
-        return f"⚠️ שגיאה: {e}"
+        query = f"{player_name} site:transfermarkt.com"
+        with DDGS() as ddgs:
+            results = ddgs.text(query)
+            for r in results:
+                if "transfermarkt.com" in r["href"] and "/profil/" in r["href"]:
+                    url = r["href"]
+                    break
+            else:
+                return "⚠️ לא נמצא קישור"
 
-# חישוב הדירוג
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        res = requests.get(url, headers=headers)
+        soup = BeautifulSoup(res.text, "html.parser")
+
+        tag = soup.find("div", class_="dataMarktwert")
+        if tag:
+            return tag.text.strip()
+        return "⚠️ לא נמצא שווי"
+    except Exception as e:
+        return f"⚠️ שגיאה: {str(e)}"
+
+# דירוג ביצועים לפי מדדים
 def calculate_score(goals, assists, rating):
     return round((goals * 4 + assists * 3 + rating * 10) / 3, 2)
 
@@ -69,7 +79,7 @@ def predict_peak_score(age, current_score):
     else:
         return round(current_score * random.uniform(0.8, 0.95), 2)
 
-# התחלת תהליך עם שם שחקן
+# תהליך עיקרי
 if player_name:
     st.success(f"הוזן השם: {player_name}")
     st.info("מאתר נתונים חיים...")
@@ -93,8 +103,7 @@ if player_name:
     st.write(f"📈 גיל משוער: {age}")
     st.write(f"🚀 תחזית שיא קריירה: {peak}")
 
-    # שווי שוק
-    value = get_tm_value(player_name)
+    value = get_transfermarkt_value_from_html(player_name)
     st.write(f"💰 שווי שוק (Transfermarkt): {value}")
 
     st.caption("הדירוג משקלל גולים, בישולים, ציונים, גיל, מגמת התפתחות ושווי")
