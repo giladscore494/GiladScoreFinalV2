@@ -11,21 +11,27 @@ st.markdown("הזן שם של שחקן כדי לראות את ביצועיו, ש
 player_name = st.text_input("שם השחקן:")
 
 def find_fbref_url(player_name):
-    query = f"{player_name} site:fbref.com"
-    with DDGS() as ddgs:
-        results = ddgs.text(query)
-        for r in results:
-            if "fbref.com/en/players/" in r["href"]:
-                return r["href"]
+    try:
+        query = f"{player_name} site:fbref.com"
+        with DDGS() as ddgs:
+            results = ddgs.text(query)
+            for r in results:
+                if "fbref.com/en/players/" in r["href"]:
+                    return r["href"]
+    except Exception as e:
+        print("DuckDuckGo search failed:", e)
     return None
 
 def find_transfermarkt_url(player_name):
-    query = f"{player_name} site:transfermarkt.com"
-    with DDGS() as ddgs:
-        results = ddgs.text(query)
-        for r in results:
-            if "transfermarkt.com" in r["href"] and "/profil/" in r["href"]:
-                return r["href"]
+    try:
+        query = f"{player_name} site:transfermarkt.com"
+        with DDGS() as ddgs:
+            results = ddgs.text(query)
+            for r in results:
+                if "transfermarkt.com" in r["href"] and "/profil/" in r["href"]:
+                    return r["href"]
+    except Exception as e:
+        print("DuckDuckGo search failed:", e)
     return None
 
 def extract_stats_from_fbref(url):
@@ -40,7 +46,7 @@ def extract_stats_from_fbref(url):
                 goals = int(stat.find("strong").text.strip())
             if "Assists" in text:
                 assists = int(stat.find("strong").text.strip())
-        rating = round(random.uniform(6.5, 8.0), 2)  # דמוי ציון
+        rating = round(random.uniform(6.5, 8.0), 2)
         return goals, assists, rating
     except:
         return 0, 0, 6.0
@@ -80,7 +86,7 @@ if player_name:
         st.write(f"🎯 בישולים: {assists}")
         st.write(f"📊 ציון ממוצע: {rating}")
     else:
-        st.warning("לא נמצאו נתונים ב-FBref")
+        st.warning("⚠️ לא נמצאו נתונים ב-FBref (נסה באנגלית או שם מלא)")
         goals, assists, rating = 0, 0, 6.0
 
     score = calculate_score(goals, assists, rating)
@@ -95,6 +101,6 @@ if player_name:
         value = extract_market_value(tm_url)
         st.write(f"💰 שווי שוק נוכחי (הערכה): {value}")
     else:
-        st.warning("לא נמצא שווי שוק מ-Transfermarkt")
+        st.warning("⚠️ לא נמצא שווי שוק מ-Transfermarkt")
 
     st.caption("הדירוג משקלל גולים, בישולים, ציונים, גיל, מגמת התפתחות ושווי")
