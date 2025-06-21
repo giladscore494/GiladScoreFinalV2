@@ -1,7 +1,2 @@
 streamlit
-pandas
 requests
-beautifulsoup4
-duckduckgo_search
-matplotlib
-scikit-learn
